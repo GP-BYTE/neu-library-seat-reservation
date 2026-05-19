@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+
+.DS_Store
+.idea/
+
+user_info.json
+schedule.json
+cache/*.json
+
+SECURITY_CLEANUP_REPORT.local.md
