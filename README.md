@@ -37,7 +37,7 @@ conda env: pachong
 1. 克隆项目：
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/GP-BYTE/neu-library-seat-reservation.git
 cd neu_liberary_3_visualization
 ```
 
