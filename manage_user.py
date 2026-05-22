@@ -65,6 +65,43 @@ def output_user_info(info,want_user_number):
 def has_user(want_usernumber):
     return not check_is_new_user(_load_user_info(), want_usernumber)
 
+def list_users():
+    users = []
+    for item in _load_user_info():
+        if not isinstance(item, dict):
+            continue
+        for usernumber in item.keys():
+            if usernumber not in users:
+                users.append(usernumber)
+    return users
+
+def delete_user(want_usernumber):
+    info = _load_user_info()
+    new_info = []
+    deleted = False
+    for item in info:
+        if not isinstance(item, dict):
+            continue
+        filtered = {key: value for key, value in item.items() if key != want_usernumber}
+        if len(filtered) != len(item):
+            deleted = True
+        if filtered:
+            new_info.append(filtered)
+    _save_user_info(new_info)
+    detect_null_delete()
+    return deleted
+
+def clear_users():
+    removed = False
+    if os.path.exists(USER_INFO_FILE):
+        os.remove(USER_INFO_FILE)
+        removed = True
+    temp_path = f'{USER_INFO_FILE}.tmp'
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+        removed = True
+    return removed
+
 # 函数功能：检测用户信息文件是否为空，如果为空则删除该文件
 def detect_null_delete():
     temp = _load_user_info()
@@ -87,6 +124,14 @@ def main(want_usernumber, password=None, interactive=True):
         temp.append(new_info)
         _save_user_info(temp)
         print('写入成功')
+    elif password is not None:
+        encoded_password = pwd_encode.mian_code(password)
+        for item in temp:
+            if want_usernumber in item:
+                item[want_usernumber] = encoded_password
+                break
+        _save_user_info(temp)
+        print('更新成功')
 
     pwd = output_user_info(temp,want_usernumber)
     return pwd

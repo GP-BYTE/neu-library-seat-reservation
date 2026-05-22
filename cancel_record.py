@@ -32,33 +32,43 @@ def get_record_list(user_token,session):
         'endTime':None,
     }
     # 发送 POST 请求并获取响应文本
-    res = session.post(url,headers=headers,json=jsons).text
-    # 将响应文本解析为 JSON 数据
-    res = json.loads(res)
+    response = session.post(url,headers=headers,json=jsons)
+    try:
+        res = response.json()
+    except ValueError as exc:
+        raise ValueError('预约记录接口返回异常，无法解析响应') from exc
+    if not isinstance(res, dict):
+        raise ValueError('预约记录接口返回格式异常')
     # 提取数据列表。平台不同版本可能返回 dataList，也可能返回 data。
     data = res.get('dataList')
     if data is None:
         data = res.get('data')
     if isinstance(data, dict):
         data = data.get('dataList') or data.get('list') or data.get('records') or []
+    if data is None and res.get('msg') not in (None, 'success'):
+        raise ValueError(f"预约记录查询失败：{res.get('msg')}")
     if data is None:
         data = []
+    if not isinstance(data, list):
+        raise ValueError('预约记录接口返回列表格式异常')
     # 初始化一个空列表，用于存储处理后的预约记录
     tem_dic = []
     # 遍历数据列表
     for item in data:
+        if not isinstance(item, dict):
+            continue
         # 初始化一个空字典，用于存储单个预约记录的信息
         tem_list = {}
         # 提取预约记录的 ID
-        tem_list['id'] = item['id']
+        tem_list['id'] = item.get('id', '')
         # 提取预约记录的开始时间
-        tem_list['startTime'] = item['startTime']
+        tem_list['startTime'] = item.get('startTime', '')
         # 提取预约记录的结束时间
-        tem_list['endTime'] = item['endTime']
+        tem_list['endTime'] = item.get('endTime', '')
         # 提取预约记录的状态名称
-        tem_list['statusName'] = item['statusName']
+        tem_list['statusName'] = item.get('statusName', '')
         # 提取预约记录的座位号
-        tem_list['seatNum'] = item['seatNum']
+        tem_list['seatNum'] = item.get('seatNum', '')
         # 将单个预约记录添加到列表中
         tem_dic.append(tem_list)
     # 返回处理后的预约记录列表
@@ -103,11 +113,15 @@ def Cancel_Site(token,id,session):
         'recordId':id,
     }
     # 发送 POST 请求并获取响应文本
-    res = session.post(url,headers=headers,data=jsons).text
-    # 将响应文本解析为 JSON 数据
-    res = json.loads(res)
+    response = session.post(url,headers=headers,data=jsons)
+    try:
+        res = response.json()
+    except ValueError as exc:
+        raise ValueError('取消预约接口返回异常，无法解析响应') from exc
+    if not isinstance(res, dict):
+        raise ValueError('取消预约接口返回格式异常')
     # 检查响应消息是否为 'success'
-    if res['msg'] == 'success':
+    if res.get('msg') == 'success':
         # 如果成功，打印取消成功的消息并返回 True
         print(f'{green}已经成功取消座位ID为{id}的预约{end}')
         return True

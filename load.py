@@ -6,6 +6,9 @@ import os
 
 
 def get_user_token(user_number,encode_password,session):
+    if not encode_password:
+        raise ValueError(f'{user_number} 缺少密码，请先提供或缓存该账号密码')
+
     # 构建 multipart/form-data 参数
     data = {
         'platformCode': '00001102',
@@ -44,10 +47,21 @@ def get_user_token(user_number,encode_password,session):
         files=send_file,  # 构建表单字段
     )
     if res is None:
-        print("POST request failed.")
-        return None
-    res = res.text
-    new_token = json.loads(res)['data']['sysReader']["readerToken"]
+        raise ValueError(f'{user_number} 登录请求失败')
+    try:
+        payload = res.json()
+    except ValueError as exc:
+        raise ValueError(f'{user_number} 登录接口返回异常，无法解析响应') from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError(f'{user_number} 登录接口返回格式异常')
+
+    data = payload.get('data')
+    sys_reader = data.get('sysReader') if isinstance(data, dict) else None
+    new_token = sys_reader.get('readerToken') if isinstance(sys_reader, dict) else None
+    if not new_token:
+        msg = payload.get('msg') or payload.get('message') or '请检查账号或密码'
+        raise ValueError(f'{user_number} 登录失败：{msg}')
     # print("登录结果:", res)
     return new_token
 

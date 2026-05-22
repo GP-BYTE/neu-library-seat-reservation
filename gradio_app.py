@@ -142,16 +142,21 @@ def refresh_history_choices():
 
 def check_account_cache_status(usernumber):
     if not usernumber:
-        return ""
+        return "", gr.update(value="")
     if not re.match(r'^\d{11}$', usernumber):
-        return "请输入11位学号"
+        return "请输入11位学号", gr.update(value="")
     if manage_user.has_user(usernumber):
-        return "无需输入"
-    return "需要输入"
+        return "无需输入", gr.update(value="")
+    return "需要输入", gr.update(value="")
 
-def get_user_session_and_token(usernumber, password):
+def get_user_session_and_token(usernumber, password, action_name="操作"):
     if not re.match(r'^\d{11}$', usernumber or ""):
         raise ValueError("请输入11位学号")
+    if not password and not manage_user.has_user(usernumber):
+        raise ValueError(
+            f"{usernumber} 本地没有缓存密码，{action_name}前请填写该账号密码。"
+            "不能复用其他账号的登录状态。"
+        )
     user_session = create_session()
     try:
         with contextlib.redirect_stdout(io.StringIO()):
@@ -289,7 +294,7 @@ def record_choices(records):
 
 def query_current_records(usernumber, password):
     try:
-        user_session, token = get_user_session_and_token(usernumber, password)
+        user_session, token = get_user_session_and_token(usernumber, password, action_name="查询预约")
         try:
             records = cancel_record.get_record_list(token, user_session)
         finally:
@@ -312,7 +317,7 @@ def cancel_selected_record(usernumber, password, selected_record_id):
     if not selected_record_id:
         return gr.update(), gr.update(choices=[], value=None), "请先选择一条预约记录"
     try:
-        user_session, token = get_user_session_and_token(usernumber, password)
+        user_session, token = get_user_session_and_token(usernumber, password, action_name="取消预约")
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 ok = cancel_record.Cancel_Site(token, selected_record_id, user_session)
@@ -508,6 +513,59 @@ def stop_reservation():
     reservation_stop_event.set()
     return "已发送停止请求，正在结束当前预约任务..."
 
+def format_cached_accounts():
+    users = manage_user.list_users()
+    if not users:
+        return "暂无已缓存账号"
+    lines = [f"已缓存账号共 {len(users)} 个："]
+    lines.extend(f"{index}. {usernumber}" for index, usernumber in enumerate(users, 1))
+    return "\n".join(lines)
+
+def refresh_account_manager():
+    users = manage_user.list_users()
+    return (
+        format_cached_accounts(),
+        gr.update(choices=users, value=users[0] if users else None),
+        "已刷新账号列表",
+    )
+
+def delete_cached_account(selected_usernumber, current_usernumber):
+    if not selected_usernumber:
+        status, password_update = check_account_cache_status(current_usernumber)
+        return (
+            format_cached_accounts(),
+            gr.update(choices=manage_user.list_users(), value=None),
+            "请先选择要下线的账号",
+            status,
+            password_update,
+        )
+
+    invalidate_prepared_reservations()
+    deleted = manage_user.delete_user(selected_usernumber)
+    users = manage_user.list_users()
+    status, password_update = check_account_cache_status(current_usernumber)
+    message = f"已下线账号：{selected_usernumber}" if deleted else f"账号不存在：{selected_usernumber}"
+    return (
+        format_cached_accounts(),
+        gr.update(choices=users, value=users[0] if users else None),
+        message,
+        status,
+        password_update,
+    )
+
+def clear_cached_accounts(current_usernumber):
+    invalidate_prepared_reservations()
+    cleared = manage_user.clear_users()
+    status, password_update = check_account_cache_status(current_usernumber)
+    message = "已下线所有账号" if cleared else "当前没有已缓存账号"
+    return (
+        format_cached_accounts(),
+        gr.update(choices=[], value=None),
+        message,
+        status,
+        password_update,
+    )
+
 # 创建Gradio界面
 with gr.Blocks(title="图书馆座位预约系统") as demo:
     gr.Markdown("# 📚 图书馆座位预约系统")
@@ -536,7 +594,7 @@ with gr.Blocks(title="图书馆座位预约系统") as demo:
     usernumber.change(
         fn=check_account_cache_status,
         inputs=[usernumber],
-        outputs=[cache_status],
+        outputs=[cache_status, password],
     )
 
     with gr.Tabs():
@@ -614,6 +672,29 @@ with gr.Blocks(title="图书馆座位预约系统") as demo:
                 lines=5,
             )
 
+        with gr.Tab("账号管理"):
+            gr.Markdown("### 已缓存账号管理")
+            cached_accounts_display = gr.Textbox(
+                label="已缓存账号",
+                value=format_cached_accounts(),
+                interactive=False,
+                lines=8,
+            )
+            cached_account_choice = gr.Dropdown(
+                choices=manage_user.list_users(),
+                label="选择要下线的账号",
+                interactive=True,
+            )
+            with gr.Row():
+                refresh_accounts_btn = gr.Button("刷新账号列表")
+                delete_account_btn = gr.Button("下线所选账号")
+                clear_accounts_btn = gr.Button("一键下线所有账号")
+            account_manage_output = gr.Textbox(
+                label="操作结果",
+                interactive=False,
+                lines=3,
+            )
+
     # 设置按钮事件处理
     add_btn.click(
         fn=add_reservation_to_list,
@@ -641,6 +722,11 @@ with gr.Blocks(title="图书馆座位预约系统") as demo:
         fn=refresh_history_choices,
         outputs=[history_choice]
     )
+
+    demo.load(
+        fn=refresh_account_manager,
+        outputs=[cached_accounts_display, cached_account_choice, account_manage_output]
+    )
     
     start_btn.click(
         fn=start_reservation,
@@ -667,6 +753,23 @@ with gr.Blocks(title="图书馆座位预约系统") as demo:
         fn=cancel_selected_record,
         inputs=[usernumber, password, current_record_choice],
         outputs=[current_records_html, current_record_choice, current_records_output],
+    )
+
+    refresh_accounts_btn.click(
+        fn=refresh_account_manager,
+        outputs=[cached_accounts_display, cached_account_choice, account_manage_output],
+    )
+
+    delete_account_btn.click(
+        fn=delete_cached_account,
+        inputs=[cached_account_choice, usernumber],
+        outputs=[cached_accounts_display, cached_account_choice, account_manage_output, cache_status, password],
+    )
+
+    clear_accounts_btn.click(
+        fn=clear_cached_accounts,
+        inputs=[usernumber],
+        outputs=[cached_accounts_display, cached_account_choice, account_manage_output, cache_status, password],
     )
 
 if __name__ == "__main__":
