@@ -49,6 +49,7 @@ prepared_signature = None
 prepared_lock = threading.Lock()
 # 存储历史预约记录
 HISTORY_FILE = os.path.join("cache", "history.json")
+TEMPLATE_FILE = os.path.join("cache", "templates.json")
 
 def load_history_records():
     if not os.path.exists(HISTORY_FILE):
@@ -72,6 +73,31 @@ def save_history_records(records=None):
     os.replace(temp_path, HISTORY_FILE)
 
 history_records = load_history_records()
+
+def load_templates():
+    if not os.path.exists(TEMPLATE_FILE):
+        return {}
+    try:
+        with open(TEMPLATE_FILE, "r") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        return {}
+    return {}
+
+def save_templates(templates):
+    os.makedirs(os.path.dirname(TEMPLATE_FILE), exist_ok=True)
+    temp_path = f"{TEMPLATE_FILE}.tmp"
+    with open(temp_path, "w") as f:
+        json.dump(templates, f)
+    os.replace(temp_path, TEMPLATE_FILE)
+
+def template_names():
+    return sorted(load_templates().keys())
+
+def template_reservation_items():
+    return [public_reservation_info(reservation) for reservation in reservation_list]
 
 def history_label(record):
     return f"{record['学号']} | {record['座位号']} | {record['开始时间']}-{record['结束时间']}"
@@ -139,6 +165,80 @@ def refresh_history_choices():
     global history_records
     history_records = load_history_records()
     return gr.update(choices=format_history_options())
+
+def refresh_template_choices():
+    names = template_names()
+    return gr.update(choices=names, value=names[0] if names else None), "已刷新模板列表"
+
+def save_current_template(template_name):
+    name = str(template_name or "").strip()
+    if not name:
+        return gr.update(choices=template_names()), "请先输入模板名称"
+    if not reservation_list:
+        return gr.update(choices=template_names()), "请先添加至少一条预约信息"
+
+    templates = load_templates()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    old_template = templates.get(name)
+    created_at = old_template.get("created_at") if isinstance(old_template, dict) else None
+    created_at = created_at or now
+    templates[name] = {
+        "name": name,
+        "created_at": created_at,
+        "updated_at": now,
+        "items": template_reservation_items(),
+    }
+    save_templates(templates)
+    names = template_names()
+    return gr.update(choices=names, value=name), f"已保存模板：{name}，共 {len(reservation_list)} 条预约"
+
+def load_template_to_reservations(template_name):
+    name = str(template_name or "").strip()
+    if not name:
+        return "请先选择模板", format_reservation_list(), gr.update(choices=format_history_options())
+
+    template = load_templates().get(name)
+    if not isinstance(template, dict):
+        return f"模板不存在：{name}", format_reservation_list(), gr.update(choices=format_history_options())
+    items = template.get("items")
+    if not isinstance(items, list) or not items:
+        return f"模板为空：{name}", format_reservation_list(), gr.update(choices=format_history_options())
+
+    invalidate_prepared_reservations()
+    added = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        usernumber = str(item.get("学号", "")).strip()
+        seat_number = str(item.get("座位号", "")).strip()
+        start_time = str(item.get("开始时间", "")).strip()
+        end_time = str(item.get("结束时间", "")).strip()
+        if not usernumber or not seat_number or not start_time or not end_time:
+            continue
+        add_reservation(usernumber, "", seat_number, start_time, end_time)
+        added += 1
+
+    if added == 0:
+        return f"模板没有可加载的预约信息：{name}", format_reservation_list(), gr.update(choices=format_history_options())
+    return (
+        f"已加载模板：{name}，新增 {added} 条预约。模板不会保存密码，预热或开始预约前请确保账号已有密码缓存。",
+        format_reservation_list(),
+        gr.update(choices=format_history_options()),
+    )
+
+def delete_template(template_name):
+    name = str(template_name or "").strip()
+    if not name:
+        return gr.update(choices=template_names(), value=None), "请先选择模板"
+    templates = load_templates()
+    if name not in templates:
+        return gr.update(choices=template_names(), value=None), f"模板不存在：{name}"
+
+    invalidate_prepared_reservations()
+    del templates[name]
+    save_templates(templates)
+    names = template_names()
+    return gr.update(choices=names, value=names[0] if names else None), f"已删除模板：{name}"
 
 def check_account_cache_status(usernumber):
     if not usernumber:
@@ -651,6 +751,28 @@ with gr.Blocks(title="图书馆座位预约系统") as demo:
                     )
                     history_add_btn = gr.Button("从历史记录加入预约列表")
                     history_clear_btn = gr.Button("清空历史记录")
+
+                    template_name = gr.Textbox(
+                        label="模板名称",
+                        placeholder="例如：工作日常用座位",
+                        max_lines=1,
+                    )
+                    template_choice = gr.Dropdown(
+                        choices=template_names(),
+                        label="预约模板",
+                        interactive=True,
+                    )
+                    with gr.Row():
+                        template_save_btn = gr.Button("保存当前列表为模板")
+                        template_load_btn = gr.Button("加载模板")
+                    with gr.Row():
+                        template_refresh_btn = gr.Button("刷新模板")
+                        template_delete_btn = gr.Button("删除模板")
+                    template_output = gr.Textbox(
+                        label="模板操作结果",
+                        interactive=False,
+                        lines=3,
+                    )
                     
                     reservation_display = gr.Textbox(
                         label="预约信息列表",
@@ -722,6 +844,29 @@ with gr.Blocks(title="图书馆座位预约系统") as demo:
         outputs=[info_display, history_choice]
     )
 
+    template_save_btn.click(
+        fn=save_current_template,
+        inputs=[template_name],
+        outputs=[template_choice, template_output]
+    )
+
+    template_load_btn.click(
+        fn=load_template_to_reservations,
+        inputs=[template_choice],
+        outputs=[info_display, reservation_display, history_choice]
+    )
+
+    template_refresh_btn.click(
+        fn=refresh_template_choices,
+        outputs=[template_choice, template_output]
+    )
+
+    template_delete_btn.click(
+        fn=delete_template,
+        inputs=[template_choice],
+        outputs=[template_choice, template_output]
+    )
+
     preheat_btn.click(
         fn=preheat_reservations,
         outputs=[output_display]
@@ -735,6 +880,11 @@ with gr.Blocks(title="图书馆座位预约系统") as demo:
     demo.load(
         fn=refresh_account_manager,
         outputs=[cached_accounts_display, cached_account_choice, account_manage_output]
+    )
+
+    demo.load(
+        fn=refresh_template_choices,
+        outputs=[template_choice, template_output]
     )
     
     start_btn.click(
