@@ -39,14 +39,16 @@ def get_record_list(user_token,session):
         raise ValueError('预约记录接口返回异常，无法解析响应') from exc
     if not isinstance(res, dict):
         raise ValueError('预约记录接口返回格式异常')
+    msg = res.get('msg')
     # 提取数据列表。平台不同版本可能返回 dataList，也可能返回 data。
     data = res.get('dataList')
     if data is None:
         data = res.get('data')
+    has_empty_data_container = isinstance(data, dict) and not data
     if isinstance(data, dict):
         data = data.get('dataList') or data.get('list') or data.get('records') or []
-    if data is None and res.get('msg') not in (None, 'success'):
-        raise ValueError(f"预约记录查询失败：{res.get('msg')}")
+    if (data is None or has_empty_data_container) and msg not in (None, 'success'):
+        raise ValueError(f"预约记录查询失败：{msg}")
     if data is None:
         data = []
     if not isinstance(data, list):
@@ -141,6 +143,8 @@ def Cancel_Setid_Run(token,start_time,session):
     tem_dic = get_record_list(token,session)
     # 找到要取消的预约记录的 ID
     cancel_id = get_cancel_aim_id(tem_dic,start_time)
+    if not cancel_id:
+        raise ValueError(f'未找到开始时间为 {start_time} 的已约记录')
     # 取消指定 ID 的预约座位
     status = Cancel_Site(token,cancel_id,session)
     # 返回取消结果

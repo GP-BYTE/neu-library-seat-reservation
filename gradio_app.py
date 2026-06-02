@@ -459,6 +459,7 @@ def preheat_reservations():
 
 def start_reservation():
     """开始预约"""
+    global reservation_list
     reservation_stop_event.clear()
     error = validate_reservation_ready()
     if error:
@@ -467,22 +468,23 @@ def start_reservation():
     
     thread_args_list = build_thread_args_list()
     contexts = take_prepared_reservations(thread_args_list)
-    
-    # 清空预约列表
-    reservation_list.clear()
+    pending_reservations = list(reservation_list)
     
     log_queue = queue.Queue()
     done = threading.Event()
+    should_clear_reservations = threading.Event()
     output_lines = ["开始预约..."]
 
     def worker():
         try:
             if contexts:
                 log_queue.put("使用已预热的预约信息")
+                should_clear_reservations.set()
                 run_prepared_with_frontend_logs(contexts, log_queue, stop_event=reservation_stop_event)
             else:
                 log_queue.put("未发现可复用预热信息，正在自动预热")
                 run_with_frontend_logs(thread_args_list, log_queue, stop_event=reservation_stop_event)
+                should_clear_reservations.set()
             if reservation_stop_event.is_set():
                 log_queue.put("已停止预约")
             else:
@@ -502,6 +504,13 @@ def start_reservation():
         yield "\n".join(output_lines), format_reservation_list()
         if not done.is_set():
             time.sleep(0.5)
+
+    if should_clear_reservations.is_set():
+        reservation_list.clear()
+        yield "\n".join(output_lines), format_reservation_list()
+    else:
+        reservation_list[:] = pending_reservations
+        yield "\n".join(output_lines + ["预约列表已保留，请修正后重试。"]), format_reservation_list()
 
 def clear_reservations():
     """清空预约列表"""
