@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>图书馆座位预约系统</title>
+    <link rel="stylesheet" href="/web/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-a"></div>
+    <div class="ambient ambient-b"></div>
+    <div class="ambient ambient-c"></div>
+
+    <main class="app-shell">
+      <aside class="sidebar glass">
+        <div class="brand">
+          <div class="brand-mark">L</div>
+          <div>
+            <p class="eyebrow">NEU Library</p>
+            <h1>座位预约</h1>
+          </div>
+        </div>
+        <nav class="nav">
+          <a href="#reserve" class="active">预约控制台</a>
+          <a href="#templates">模板与历史</a>
+          <a href="#records">当前预约</a>
+          <a href="#accounts">账号管理</a>
+          <a href="#logs">运行日志</a>
+        </nav>
+        <div class="side-status">
+          <span id="statusDot" class="status-dot"></span>
+          <div>
+            <span class="muted">任务状态</span>
+            <strong id="runStatus">idle</strong>
+          </div>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar glass">
+          <div>
+            <p class="eyebrow">Liquid Glass Console</p>
+            <h2>多账号预约工作台</h2>
+          </div>
+          <div class="topbar-meta">
+            <span>目标提交时间 <strong id="targetTime">12:00:17</strong></span>
+            <span>已预热 <strong id="preparedCount">0</strong></span>
+          </div>
+        </header>
+
+        <div id="toast" class="toast" hidden></div>
+
+        <section id="reserve" class="panel-grid">
+          <article class="glass panel composer-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Reservation</p>
+                <h3>添加预约</h3>
+              </div>
+              <span id="cacheStatus" class="cache-pill">输入学号后检查缓存</span>
+            </div>
+
+            <form id="reservationForm" class="form-grid">
+              <label>
+                <span>学号</span>
+                <input id="usernumber" name="usernumber" inputmode="numeric" maxlength="11" placeholder="11 位学号" autocomplete="off" required />
+              </label>
+              <label>
+                <span>密码</span>
+                <input id="password" name="password" type="password" placeholder="未缓存时填写" autocomplete="current-password" />
+              </label>
+              <label>
+                <span>座位号</span>
+                <input id="seatNumber" name="seatNumber" placeholder="例如 21624B / 6B" required />
+              </label>
+              <label>
+                <span>开始时间</span>
+                <select id="startTime" name="startTime" required></select>
+              </label>
+              <label>
+                <span>结束时间</span>
+                <select id="endTime" name="endTime" required></select>
+              </label>
+              <button class="primary span-2" type="submit">添加到预约列表</button>
+            </form>
+          </article>
+
+          <article class="glass panel queue-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Queue</p>
+                <h3>当前预约列表</h3>
+              </div>
+              <button id="clearReservations" class="ghost" type="button">清空</button>
+            </div>
+            <div id="reservationList" class="reservation-list empty">暂无预约信息</div>
+            <div class="action-row">
+              <button id="preheatBtn" class="secondary" type="button">预热 / 检查</button>
+              <button id="startBtn" class="primary" type="button">开始预约</button>
+              <button id="stopBtn" class="danger" type="button">停止</button>
+            </div>
+          </article>
+        </section>
+
+        <section id="templates" class="panel-grid two">
+          <article class="glass panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Templates</p>
+                <h3>预约模板</h3>
+              </div>
+              <button id="refreshTemplates" class="ghost" type="button">刷新</button>
+            </div>
+            <div class="form-grid compact">
+              <label class="span-2">
+                <span>模板名称</span>
+                <input id="templateName" placeholder="例如 明天常用座位" />
+              </label>
+              <button id="saveTemplate" class="secondary" type="button">保存当前列表</button>
+              <label>
+                <span>选择模板</span>
+                <select id="templateSelect"></select>
+              </label>
+              <button id="loadTemplate" class="primary" type="button">加载模板</button>
+              <button id="deleteTemplate" class="danger" type="button">删除模板</button>
+            </div>
+            <p class="hint">模板只保存学号、座位、区域和时间，不保存密码。</p>
+          </article>
+
+          <article class="glass panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">History</p>
+                <h3>历史记录</h3>
+              </div>
+              <button id="clearHistory" class="ghost" type="button">清空</button>
+            </div>
+            <div class="form-grid compact">
+              <label class="span-2">
+                <span>选择历史记录</span>
+                <select id="historySelect"></select>
+              </label>
+              <button id="loadHistory" class="primary span-2" type="button">添加到预约列表</button>
+            </div>
+            <p class="hint">历史记录同样不保存密码，加载后会按目标账号独立校验。</p>
+          </article>
+        </section>
+
+        <section id="records" class="panel-grid two">
+          <article class="glass panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Records</p>
+                <h3>查询与取消预约</h3>
+              </div>
+            </div>
+            <form id="recordForm" class="form-grid compact">
+              <label>
+                <span>学号</span>
+                <input id="recordUsernumber" inputmode="numeric" maxlength="11" placeholder="目标账号学号" required />
+              </label>
+              <label>
+                <span>密码</span>
+                <input id="recordPassword" type="password" placeholder="未缓存时填写" />
+              </label>
+              <button class="primary span-2" type="submit">查询当前预约</button>
+            </form>
+            <div class="form-grid compact">
+              <label class="span-2">
+                <span>选择记录</span>
+                <select id="recordSelect"></select>
+              </label>
+              <button id="cancelRecord" class="danger span-2" type="button">取消所选预约</button>
+            </div>
+          </article>
+
+          <article class="glass panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Active</p>
+                <h3>当前预约记录</h3>
+              </div>
+            </div>
+            <div id="recordCards" class="record-cards empty">暂无当前预约记录</div>
+          </article>
+        </section>
+
+        <section id="accounts" class="panel-grid two">
+          <article class="glass panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Accounts</p>
+                <h3>已登录账号</h3>
+              </div>
+              <button id="refreshAccounts" class="ghost" type="button">刷新</button>
+            </div>
+            <div id="accountList" class="account-list empty">暂无已缓存账号</div>
+          </article>
+
+          <article class="glass panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Logout</p>
+                <h3>下线账号</h3>
+              </div>
+            </div>
+            <div class="form-grid compact">
+              <label class="span-2">
+                <span>选择账号</span>
+                <select id="accountSelect"></select>
+              </label>
+              <button id="deleteAccount" class="danger" type="button">下线所选账号</button>
+              <button id="clearAccounts" class="danger subtle-danger" type="button">一键下线所有账号</button>
+            </div>
+            <p class="hint">这里只展示学号，不展示密码或编码后的密码。</p>
+          </article>
+        </section>
+
+        <section id="logs" class="glass panel log-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Runtime</p>
+              <h3>运行日志</h3>
+            </div>
+            <button id="refreshState" class="ghost" type="button">刷新状态</button>
+          </div>
+          <div id="runLog" class="log-box">暂无运行日志</div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/web/app.js" defer></script>
+  </body>
+</html>
