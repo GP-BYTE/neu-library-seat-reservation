@@ -50,8 +50,8 @@
 
         <div id="toast" class="toast" hidden></div>
 
-        <section id="reserve" class="panel-grid">
-          <article class="glass panel composer-panel">
+        <section class="dashboard-grid">
+          <article id="reserve" class="glass panel composer-panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Reservation</p>
@@ -100,10 +100,8 @@
               <button id="stopBtn" class="danger" type="button">停止</button>
             </div>
           </article>
-        </section>
 
-        <section id="templates" class="panel-grid two">
-          <article class="glass panel">
+          <article id="templates" class="glass panel template-panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Templates</p>
@@ -129,7 +127,7 @@
             <p class="hint">模板只保存学号、座位、区域和时间，不保存密码。</p>
           </article>
 
-          <article class="glass panel">
+          <article class="glass panel history-panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">History</p>
@@ -146,10 +144,8 @@
             </div>
             <p class="hint">历史记录同样不保存密码，加载后会按目标账号独立校验。</p>
           </article>
-        </section>
 
-        <section id="records" class="panel-grid two">
-          <article class="glass panel">
+          <article id="records" class="glass panel records-panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Records</p>
@@ -176,7 +172,7 @@
             </div>
           </article>
 
-          <article class="glass panel">
+          <article class="glass panel active-panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Active</p>
@@ -185,10 +181,8 @@
             </div>
             <div id="recordCards" class="record-cards empty">暂无当前预约记录</div>
           </article>
-        </section>
 
-        <section id="accounts" class="panel-grid two">
-          <article class="glass panel">
+          <article id="accounts" class="glass panel accounts-panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Accounts</p>
@@ -199,7 +193,7 @@
             <div id="accountList" class="account-list empty">暂无已缓存账号</div>
           </article>
 
-          <article class="glass panel">
+          <article class="glass panel logout-panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Logout</p>
@@ -216,17 +210,17 @@
             </div>
             <p class="hint">这里只展示学号，不展示密码或编码后的密码。</p>
           </article>
-        </section>
 
-        <section id="logs" class="glass panel log-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Runtime</p>
-              <h3>运行日志</h3>
+          <article id="logs" class="glass panel log-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Runtime</p>
+                <h3>运行日志</h3>
+              </div>
+              <button id="refreshState" class="ghost" type="button">刷新状态</button>
             </div>
-            <button id="refreshState" class="ghost" type="button">刷新状态</button>
-          </div>
-          <div id="runLog" class="log-box">暂无运行日志</div>
+            <div id="runLog" class="log-box">暂无运行日志</div>
+          </article>
         </section>
       </section>
     </main>

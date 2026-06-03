@@ -227,6 +227,7 @@ h3 {
 .workspace {
   display: grid;
   gap: 18px;
+  align-content: start;
   min-width: 0;
 }
 
@@ -257,10 +258,25 @@ h3 {
   background: rgba(255, 255, 255, 0.44);
 }
 
+.dashboard-grid,
 .panel-grid {
   display: grid;
-  grid-template-columns: minmax(300px, 0.95fr) minmax(360px, 1.05fr);
   gap: 18px;
+  align-items: stretch;
+}
+
+.dashboard-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    "composer queue"
+    "templates history"
+    "records active"
+    "accounts logout"
+    "logs logs";
+}
+
+.panel-grid {
+  grid-template-columns: minmax(300px, 0.95fr) minmax(360px, 1.05fr);
 }
 
 .panel-grid.two {
@@ -268,15 +284,60 @@ h3 {
 }
 
 .panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 276px;
   padding: 22px;
   border-radius: var(--radius);
   animation: rise 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+.composer-panel {
+  grid-area: composer;
+}
+
+.queue-panel {
+  grid-area: queue;
+}
+
+.template-panel {
+  grid-area: templates;
+}
+
+.history-panel {
+  grid-area: history;
+}
+
+.records-panel {
+  grid-area: records;
+}
+
+.active-panel {
+  grid-area: active;
+}
+
+.accounts-panel {
+  grid-area: accounts;
+}
+
+.logout-panel {
+  grid-area: logout;
+}
+
+.log-panel {
+  grid-area: logs;
+}
+
+.composer-panel,
+.queue-panel {
+  min-height: 386px;
+}
+
 .panel-heading {
   position: relative;
   z-index: 1;
+  flex: 0 0 auto;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 18px;
@@ -292,6 +353,10 @@ h3 {
 
 .form-grid.compact {
   gap: 12px;
+}
+
+.records-panel .form-grid + .form-grid {
+  margin-top: 12px;
 }
 
 .span-2 {
@@ -403,8 +468,14 @@ select:focus {
 .account-list {
   display: grid;
   gap: 10px;
-  min-height: 116px;
+  min-height: 124px;
   align-content: start;
+}
+
+.queue-panel .reservation-list,
+.active-panel .record-cards,
+.accounts-panel .account-list {
+  flex: 1 1 auto;
 }
 
 .empty {
@@ -476,9 +547,11 @@ select:focus {
 .action-row {
   position: relative;
   z-index: 1;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 16px;
+  margin-top: auto;
+  padding-top: 16px;
 }
 
 .template-controls {
@@ -487,6 +560,8 @@ select:focus {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+  flex: 1 1 auto;
+  align-content: start;
 }
 
 .button-pair {
@@ -502,7 +577,8 @@ select:focus {
 .hint {
   position: relative;
   z-index: 1;
-  margin: 14px 0 0;
+  margin: auto 0 0;
+  padding-top: 14px;
   font-size: 0.88rem;
   line-height: 1.55;
 }
@@ -517,7 +593,7 @@ select:focus {
 }
 
 .log-panel {
-  min-height: 320px;
+  min-height: 340px;
 }
 
 .log-box {
@@ -602,6 +678,7 @@ select:focus {
     position: relative;
     top: 0;
     height: auto;
+    gap: 18px;
   }
 
   .nav {
@@ -609,12 +686,37 @@ select:focus {
   }
 
   .panel-grid,
-  .panel-grid.two {
+  .panel-grid.two,
+  .dashboard-grid {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "composer"
+      "queue"
+      "templates"
+      "history"
+      "records"
+      "active"
+      "accounts"
+      "logout"
+      "logs";
+  }
+
+  .panel,
+  .composer-panel,
+  .queue-panel {
+    min-height: auto;
+  }
+
+  .log-panel {
+    min-height: 300px;
+  }
+
+  .log-box {
+    min-height: 200px;
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 520px) {
   .app-shell {
     padding: 10px;
   }
