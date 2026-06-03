@@ -43,6 +43,8 @@ const els = {
 let state = null;
 let pollTimer = null;
 let lastRecords = [];
+let userEditing = false;
+let userEditingTimer = null;
 const renderCache = {
   accounts: "",
   history: "",
@@ -75,6 +77,27 @@ function stableSignature(value) {
   return JSON.stringify(value ?? null);
 }
 
+function isBusyStatus(status) {
+  return status === "running" || status === "preheating";
+}
+
+function isEditableElement(element) {
+  if (!element) return false;
+  return ["INPUT", "SELECT", "TEXTAREA"].includes(element.tagName);
+}
+
+function markUserEditing() {
+  userEditing = true;
+  window.clearTimeout(userEditingTimer);
+  userEditingTimer = window.setTimeout(() => {
+    userEditing = isEditableElement(document.activeElement);
+  }, 1200);
+}
+
+function focusedOnEditable() {
+  return userEditing || isEditableElement(document.activeElement);
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
@@ -85,6 +108,21 @@ async function api(path, options = {}) {
     throw new Error(data.detail || data.message || "请求失败");
   }
   return data;
+}
+
+function reservationSignature(reservations) {
+  return stableSignature(
+    (reservations || []).map((item) => ({
+      usernumber: item["学号"],
+      seat: item["座位号"],
+      regionId: item["区域编号"] || "",
+      regionName: item["区域名称"] || "",
+      startTime: item["开始时间"],
+      endTime: item["结束时间"],
+      passwordCached: Boolean(item.passwordCached),
+      passwordProvided: Boolean(item.passwordProvided),
+    }))
+  );
 }
 
 function setSelectOptions(select, options, placeholder = "暂无可选项") {
@@ -134,7 +172,7 @@ function fillTimeOptions(timeOptions) {
 }
 
 function renderReservations(reservations) {
-  const signature = stableSignature(reservations);
+  const signature = reservationSignature(reservations);
   if (renderCache.reservations === signature) {
     return;
   }
@@ -266,20 +304,29 @@ function renderHistoryOptions(history) {
 }
 
 function renderState(nextState) {
+  const previousStatus = state?.runStatus || "idle";
   state = nextState;
-  if (state.timeOptions?.length) fillTimeOptions(state.timeOptions);
+
+  if (!focusedOnEditable() && state.timeOptions?.length) {
+    fillTimeOptions(state.timeOptions);
+  }
   els.targetTime.textContent = state.targetTime || "12:00:17";
   els.preparedCount.textContent = String(state.preparedCount || 0);
   els.runStatus.textContent = state.runStatus || "idle";
   els.statusDot.className = `status-dot ${state.runStatus || "idle"}`;
 
   renderReservations(state.reservations || []);
-  renderAccounts(state.accounts || []);
   renderLog(state.runLog || []);
-  renderTemplateOptions(state.templates || []);
-  renderHistoryOptions(state.history || []);
+
+  const statusBecameIdle = isBusyStatus(previousStatus) && !isBusyStatus(state.runStatus);
+  if (!focusedOnEditable() || statusBecameIdle) {
+    renderAccounts(state.accounts || []);
+    renderTemplateOptions(state.templates || []);
+    renderHistoryOptions(state.history || []);
+  }
 
   if (state.message) showToast(state.message);
+  scheduleNextPoll();
 }
 
 async function refreshState() {
@@ -412,15 +459,46 @@ document.querySelectorAll(".nav a").forEach((link) => {
 });
 
 function ensurePolling() {
-  window.clearInterval(pollTimer);
-  pollTimer = window.setInterval(async () => {
+  window.clearTimeout(pollTimer);
+  scheduleNextPoll();
+}
+
+function scheduleNextPoll(delay = null) {
+  window.clearTimeout(pollTimer);
+  const status = state?.runStatus || "idle";
+  const nextDelay = delay ?? (isBusyStatus(status) ? 1200 : 8000);
+  pollTimer = window.setTimeout(async () => {
+    if (focusedOnEditable() && !isBusyStatus(state?.runStatus || "idle")) {
+      scheduleNextPoll(1500);
+      return;
+    }
     try {
       await refreshState();
     } catch {
-      window.clearInterval(pollTimer);
+      scheduleNextPoll(5000);
     }
-  }, 1500);
+  }, nextDelay);
 }
+
+document.addEventListener("focusin", (event) => {
+  if (isEditableElement(event.target)) {
+    markUserEditing();
+  }
+});
+
+document.addEventListener("input", (event) => {
+  if (isEditableElement(event.target)) {
+    markUserEditing();
+  }
+});
+
+document.addEventListener("focusout", () => {
+  window.clearTimeout(userEditingTimer);
+  userEditingTimer = window.setTimeout(() => {
+    userEditing = false;
+    scheduleNextPoll(400);
+  }, 250);
+});
 
 refreshState()
   .then(() => {

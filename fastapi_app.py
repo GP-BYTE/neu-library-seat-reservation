@@ -465,8 +465,17 @@ def current_state(extra_message: str = "") -> Dict[str, Any]:
     }
 
 
-app = FastAPI(title="NEU Library Seat Reservation", version="4.0.0")
+app = FastAPI(title="NEU Library Seat Reservation", version="4.0.4")
 app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
+
+
+@app.middleware("http")
+async def no_cache_frontend_assets(request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/web/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @app.get("/")
