@@ -463,7 +463,7 @@ def run_with_frontend_logs(thread_args_list, log_queue, stop_event=None):
     root_logger.handlers = [handler]
     try:
         with contextlib.redirect_stdout(log_stream), contextlib.redirect_stderr(log_stream):
-            main.thread_run(*thread_args_list, stop_event=stop_event)
+            return main.thread_run(*thread_args_list, stop_event=stop_event) or []
     finally:
         log_stream.flush()
         root_logger.handlers = old_handlers
@@ -482,8 +482,8 @@ def run_prepared_with_frontend_logs(contexts, log_queue, stop_event=None):
                 if should_wait:
                     stopped = main.wait_until_reservation_start(stop_event=stop_event)
                     if stopped:
-                        return
-                main.thread_submit_prepared(contexts, stop_event=stop_event)
+                        return []
+                return main.thread_submit_prepared(contexts, stop_event=stop_event) or []
             finally:
                 main.close_prepared_contexts(contexts)
     finally:
@@ -522,6 +522,19 @@ def validate_reservation_ready():
         users = "、".join(sorted(set(missing_password_users)))
         return f"以下账号本地还没有缓存密码，请在前端填写密码后再添加预约：{users}"
     return None
+
+def summarize_submit_results(results):
+    normalized = []
+    for result in results or []:
+        if isinstance(result, dict):
+            raw_result = result.get("result", result.get("msg", result.get("message", "")))
+            normalized.append({**result, "ok": bool(result.get("ok")) or raw_result == "success", "result": raw_result})
+        else:
+            normalized.append({"ok": result == "success", "result": result})
+    total = len(normalized)
+    success_count = sum(1 for result in normalized if result.get("ok"))
+    failures = [result for result in normalized if not result.get("ok")]
+    return total, success_count, failures
 
 def preheat_reservations():
     """提前登录并解析座位映射，正式预约时直接提交。"""
@@ -577,18 +590,23 @@ def start_reservation():
 
     def worker():
         try:
+            submit_results = []
             if contexts:
                 log_queue.put("使用已预热的预约信息")
-                should_clear_reservations.set()
-                run_prepared_with_frontend_logs(contexts, log_queue, stop_event=reservation_stop_event)
+                submit_results = run_prepared_with_frontend_logs(contexts, log_queue, stop_event=reservation_stop_event)
             else:
                 log_queue.put("未发现可复用预热信息，正在自动预热")
-                run_with_frontend_logs(thread_args_list, log_queue, stop_event=reservation_stop_event)
-                should_clear_reservations.set()
+                submit_results = run_with_frontend_logs(thread_args_list, log_queue, stop_event=reservation_stop_event)
             if reservation_stop_event.is_set():
                 log_queue.put("已停止预约")
             else:
-                log_queue.put("预约完成！")
+                total, success_count, failures = summarize_submit_results(submit_results)
+                if total > 0 and success_count == total:
+                    should_clear_reservations.set()
+                    log_queue.put(f"预约完成：成功 {success_count}/{total} 条。")
+                else:
+                    failure_text = "；".join(str(item.get("result", "未知失败")) for item in failures[:3]) or "未收到有效提交结果"
+                    log_queue.put(f"预约未全部成功：成功 {success_count}/{total} 条，失败 {total - success_count} 条。{failure_text}")
         except Exception as e:
             log_queue.put(f"预约过程中出现错误: {str(e)}")
         finally:

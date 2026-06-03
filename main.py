@@ -277,11 +277,35 @@ def prepare_thread_contexts(*togo_args_list, stop_event=None):
 
 def thread_submit_prepared(contexts, stop_event=None):
     threads = []
-    for context in contexts:
+    results = [None] * len(contexts)
+
+    def submit_worker(index, context):
+        try:
+            raw_result = submit_to_go(context, stop_event=stop_event)
+            results[index] = {
+                'usernumber': getattr(context, 'usernumber', ''),
+                'set_id': getattr(context, 'set_id', ''),
+                'start_time': getattr(context, 'start_time', ''),
+                'end_time': getattr(context, 'end_time', ''),
+                'result': raw_result,
+                'ok': raw_result == 'success',
+            }
+        except Exception as exc:
+            results[index] = {
+                'usernumber': getattr(context, 'usernumber', ''),
+                'set_id': getattr(context, 'set_id', ''),
+                'start_time': getattr(context, 'start_time', ''),
+                'end_time': getattr(context, 'end_time', ''),
+                'result': str(exc),
+                'ok': False,
+                'error': True,
+            }
+
+    for index, context in enumerate(contexts):
         if stop_event is not None and stop_event.is_set():
             print('已停止预约')
             break
-        thread = threading.Thread(target=submit_to_go, args=(context,), kwargs={'stop_event': stop_event})
+        thread = threading.Thread(target=submit_worker, args=(index, context))
         threads.append(thread)
         thread.start()
         delay = random.uniform(0, 0.12)
@@ -294,6 +318,7 @@ def thread_submit_prepared(contexts, stop_event=None):
 
     for thread in threads:
         thread.join()
+    return [result for result in results if result is not None]
 
 def thread_run(*togo_args_list, stop_event=None):
     """
@@ -309,7 +334,7 @@ def thread_run(*togo_args_list, stop_event=None):
         should_wait = all(getattr(context, 'user_defind_time', None) is None for context in contexts)
         if should_wait and wait_until_reservation_start(stop_event=stop_event):
             return
-        thread_submit_prepared(contexts, stop_event=stop_event)
+        return thread_submit_prepared(contexts, stop_event=stop_event)
     finally:
         close_prepared_contexts(contexts)
 

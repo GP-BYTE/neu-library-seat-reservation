@@ -391,7 +391,94 @@ def capture_logs(fn):
     return result, lines
 
 
-def run_with_frontend_logs(thread_args_list: List[tuple], stop_event=None) -> None:
+def normalize_submit_result(result: Any) -> Dict[str, Any]:
+    if isinstance(result, dict):
+        raw_result = result.get("result", result.get("msg", result.get("message", "")))
+        ok = bool(result.get("ok")) or raw_result == "success"
+        return {
+            "usernumber": str(result.get("usernumber", "")),
+            "seat": str(result.get("set_id", result.get("seat", ""))),
+            "start_time": str(result.get("start_time", "")),
+            "end_time": str(result.get("end_time", "")),
+            "result": raw_result,
+            "ok": ok,
+            "error": bool(result.get("error")),
+        }
+    return {
+        "usernumber": "",
+        "seat": "",
+        "start_time": "",
+        "end_time": "",
+        "result": result,
+        "ok": result == "success",
+        "error": False,
+    }
+
+
+def summarize_submit_results(results: Any) -> Dict[str, Any]:
+    normalized = [normalize_submit_result(result) for result in (results or [])]
+    total = len(normalized)
+    success_count = sum(1 for result in normalized if result["ok"])
+    failures = [result for result in normalized if not result["ok"]]
+    return {
+        "results": normalized,
+        "total": total,
+        "success_count": success_count,
+        "failure_count": total - success_count,
+        "failures": failures,
+        "all_success": total > 0 and success_count == total,
+    }
+
+
+def failed_reservations_from_results(
+    pending_reservations: List[Dict[str, Any]],
+    summary: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    success_keys = {
+        (
+            result.get("usernumber", ""),
+            result.get("seat", ""),
+            result.get("start_time", ""),
+            result.get("end_time", ""),
+        )
+        for result in summary.get("results", [])
+        if result.get("ok")
+    }
+    if not success_keys:
+        return pending_reservations
+    return [
+        reservation
+        for reservation in pending_reservations
+        if (
+            str(reservation.get("学号", "")),
+            str(reservation.get("座位号", "")),
+            str(reservation.get("开始时间", "")),
+            str(reservation.get("结束时间", "")),
+        )
+        not in success_keys
+    ]
+
+
+def failure_summary_line(summary: Dict[str, Any]) -> str:
+    details = []
+    for failure in summary.get("failures", [])[:3]:
+        target = " ".join(
+            part
+            for part in [
+                failure.get("usernumber", ""),
+                failure.get("seat", ""),
+                f"{failure.get('start_time', '')}-{failure.get('end_time', '')}".strip("-"),
+            ]
+            if part
+        )
+        result = failure.get("result", "未知失败")
+        details.append(f"{target or '预约任务'}：{result}")
+    if not details:
+        details.append("未收到有效提交结果")
+    return "；".join(details)
+
+
+def run_with_frontend_logs(thread_args_list: List[tuple], stop_event=None) -> List[Dict[str, Any]]:
     log_stream = AppLogStream()
     root_logger = logging.getLogger()
     old_handlers = root_logger.handlers[:]
@@ -401,14 +488,15 @@ def run_with_frontend_logs(thread_args_list: List[tuple], stop_event=None) -> No
 
     try:
         with contextlib.redirect_stdout(log_stream), contextlib.redirect_stderr(log_stream):
-            main.thread_run(*thread_args_list, stop_event=stop_event)
+            result = main.thread_run(*thread_args_list, stop_event=stop_event)
             log_stream.flush()
+            return result or []
     finally:
         log_stream.flush()
         root_logger.handlers = old_handlers
 
 
-def run_prepared_with_frontend_logs(contexts: List[Any], stop_event=None) -> None:
+def run_prepared_with_frontend_logs(contexts: List[Any], stop_event=None) -> List[Dict[str, Any]]:
     log_stream = AppLogStream()
     root_logger = logging.getLogger()
     old_handlers = root_logger.handlers[:]
@@ -423,8 +511,8 @@ def run_prepared_with_frontend_logs(contexts: List[Any], stop_event=None) -> Non
                 if should_wait:
                     stopped = main.wait_until_reservation_start(stop_event=stop_event)
                     if stopped:
-                        return
-                main.thread_submit_prepared(contexts, stop_event=stop_event)
+                        return []
+                return main.thread_submit_prepared(contexts, stop_event=stop_event) or []
             finally:
                 main.close_prepared_contexts(contexts)
             log_stream.flush()
@@ -465,7 +553,7 @@ def current_state(extra_message: str = "") -> Dict[str, Any]:
     }
 
 
-app = FastAPI(title="NEU Library Seat Reservation", version="4.0.4")
+app = FastAPI(title="NEU Library Seat Reservation", version="4.0.5")
 app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
 
 
@@ -653,26 +741,46 @@ def api_start():
     def worker() -> None:
         should_clear_reservations = False
         try:
+            submit_results = []
             if contexts:
                 app_state.append_log("使用已预热的预约信息")
-                should_clear_reservations = True
-                run_prepared_with_frontend_logs(contexts, stop_event=app_state.reservation_stop_event)
+                submit_results = run_prepared_with_frontend_logs(
+                    contexts,
+                    stop_event=app_state.reservation_stop_event,
+                )
             else:
                 app_state.append_log("未发现可复用预热信息，正在自动预热")
-                run_with_frontend_logs(thread_args_list, stop_event=app_state.reservation_stop_event)
-                should_clear_reservations = True
+                submit_results = run_with_frontend_logs(
+                    thread_args_list,
+                    stop_event=app_state.reservation_stop_event,
+                )
             if app_state.reservation_stop_event.is_set():
                 app_state.set_status("stopped")
                 app_state.append_log("已停止预约")
             else:
-                app_state.set_status("done")
-                app_state.append_log("预约完成")
+                summary = summarize_submit_results(submit_results)
+                if summary["all_success"]:
+                    should_clear_reservations = True
+                    app_state.set_status("done")
+                    app_state.append_log(
+                        f"预约完成：成功 {summary['success_count']}/{summary['total']} 条。"
+                    )
+                else:
+                    app_state.set_status("error")
+                    app_state.reservation_list[:] = failed_reservations_from_results(
+                        pending_reservations,
+                        summary,
+                    )
+                    app_state.append_log(
+                        f"预约未全部成功：成功 {summary['success_count']}/{summary['total']} 条，"
+                        f"失败 {summary['failure_count']} 条。{failure_summary_line(summary)}"
+                    )
+                    app_state.append_log("未成功的预约已保留在列表中，可检查日志后重试。")
         except Exception as exc:
             app_state.set_status("error")
             app_state.append_log(f"预约过程中出现错误：{exc}")
-            if not should_clear_reservations:
-                app_state.reservation_list[:] = pending_reservations
-                app_state.append_log("预约列表已保留，请修正后重试。")
+            app_state.reservation_list[:] = pending_reservations
+            app_state.append_log("预约列表已保留，请修正后重试。")
         finally:
             if should_clear_reservations:
                 app_state.reservation_list.clear()

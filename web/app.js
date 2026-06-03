@@ -31,6 +31,7 @@ const els = {
   recordSelect: document.querySelector("#recordSelect"),
   cancelRecord: document.querySelector("#cancelRecord"),
   recordCards: document.querySelector("#recordCards"),
+  toggleRecordCards: document.querySelector("#toggleRecordCards"),
   accountList: document.querySelector("#accountList"),
   accountSelect: document.querySelector("#accountSelect"),
   refreshAccounts: document.querySelector("#refreshAccounts"),
@@ -43,6 +44,7 @@ const els = {
 let state = null;
 let pollTimer = null;
 let lastRecords = [];
+let recordsCollapsed = false;
 let userEditing = false;
 let userEditingTimer = null;
 const renderCache = {
@@ -223,6 +225,15 @@ function renderRecords(records) {
   if (!lastRecords.length) {
     els.recordCards.className = "record-cards empty";
     els.recordCards.textContent = "暂无当前预约记录";
+    els.toggleRecordCards.hidden = true;
+    return;
+  }
+  els.toggleRecordCards.hidden = false;
+  els.toggleRecordCards.textContent = recordsCollapsed ? "展开记录" : "收起记录";
+  els.toggleRecordCards.setAttribute("aria-expanded", String(!recordsCollapsed));
+  if (recordsCollapsed) {
+    els.recordCards.className = "record-cards collapsed-summary";
+    els.recordCards.textContent = `已收起 ${lastRecords.length} 条预约记录，可继续通过上方下拉框选择并取消。`;
     return;
   }
   els.recordCards.className = "record-cards";
@@ -425,6 +436,7 @@ els.recordForm.addEventListener(
       }),
     });
     renderState(data);
+    recordsCollapsed = false;
     renderRecords(data.records || []);
   })
 );
@@ -441,9 +453,15 @@ els.cancelRecord.addEventListener(
       }),
     });
     renderState(data);
+    recordsCollapsed = false;
     renderRecords(data.records || []);
   })
 );
+
+els.toggleRecordCards.addEventListener("click", () => {
+  recordsCollapsed = !recordsCollapsed;
+  renderRecords(lastRecords);
+});
 
 els.deleteAccount.addEventListener(
   "click",

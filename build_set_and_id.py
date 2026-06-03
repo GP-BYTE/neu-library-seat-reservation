@@ -34,9 +34,19 @@ BUSINESS_STOP_KEYWORDS = (
     '已被占用',
     '不可预约',
     '不存在',
-    '频繁',
     '参数',
     '未找到座位映射',
+)
+
+TRANSIENT_RETRY_KEYWORDS = (
+    '频繁',
+    '稍后',
+    '未开始',
+    '未到',
+    '尚未',
+    '还未',
+    '过早',
+    'too early',
 )
 
 @dataclass
@@ -82,6 +92,8 @@ def interruptible_sleep(seconds, stop_event=None):
 
 def should_stop_after_response(msg):
     text = str(msg)
+    if any(keyword in text for keyword in TRANSIENT_RETRY_KEYWORDS):
+        return False
     return any(keyword in text for keyword in BUSINESS_STOP_KEYWORDS)
 
 def warm_order_session(user_token, session):
@@ -547,6 +559,9 @@ def submit_prepared_reservation(context,max_attempts=20,stop_event=None,debug=Fa
                 logging.error(f'{red}用户{context.usernumber} : 第{attempt}次预约异常：{e}{end}')
 
         if attempt < max_attempts:
+            logging.info(
+                f'{yellow}用户{context.usernumber} : 准备第{attempt + 1}/{max_attempts}次重试{end}'
+            )
             if interruptible_sleep(random.uniform(0.25, 0.9), stop_event):
                 logging.info('预约已停止')
                 return 'stopped'

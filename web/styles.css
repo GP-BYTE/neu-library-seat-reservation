@@ -408,6 +408,13 @@ select:focus {
   transition: box-shadow 160ms ease, filter 160ms ease, background 160ms ease;
 }
 
+.compact-button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
 .primary {
   color: white;
   background: linear-gradient(145deg, #167dff, #18bfcf);
@@ -465,6 +472,17 @@ select:focus {
   gap: 10px;
   min-height: 136px;
   align-content: start;
+}
+
+.record-cards.collapsed-summary {
+  min-height: 64px;
+  align-content: center;
+  color: var(--muted);
+  padding: 16px;
+  border: 1px dashed rgba(22, 32, 51, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.34);
+  font-weight: 650;
 }
 
 .queue-panel .reservation-list,
