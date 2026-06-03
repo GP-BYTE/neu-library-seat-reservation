@@ -111,8 +111,8 @@
               </div>
               <button id="refreshTemplates" class="ghost" type="button">刷新</button>
             </div>
-            <div class="form-grid compact">
-              <label class="span-2">
+            <div class="template-controls">
+              <label>
                 <span>模板名称</span>
                 <input id="templateName" placeholder="例如 明天常用座位" />
               </label>
@@ -121,8 +121,10 @@
                 <span>选择模板</span>
                 <select id="templateSelect"></select>
               </label>
-              <button id="loadTemplate" class="primary" type="button">加载模板</button>
-              <button id="deleteTemplate" class="danger" type="button">删除模板</button>
+              <div class="button-pair">
+                <button id="loadTemplate" class="primary" type="button">加载模板</button>
+                <button id="deleteTemplate" class="danger" type="button">删除模板</button>
+              </div>
             </div>
             <p class="hint">模板只保存学号、座位、区域和时间，不保存密码。</p>
           </article>
@@ -135,12 +137,12 @@
               </div>
               <button id="clearHistory" class="ghost" type="button">清空</button>
             </div>
-            <div class="form-grid compact">
-              <label class="span-2">
+            <div class="template-controls">
+              <label>
                 <span>选择历史记录</span>
                 <select id="historySelect"></select>
               </label>
-              <button id="loadHistory" class="primary span-2" type="button">添加到预约列表</button>
+              <button id="loadHistory" class="primary" type="button">添加到预约列表</button>
             </div>
             <p class="hint">历史记录同样不保存密码，加载后会按目标账号独立校验。</p>
           </article>

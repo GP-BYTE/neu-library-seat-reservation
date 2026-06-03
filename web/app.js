@@ -43,6 +43,14 @@ const els = {
 let state = null;
 let pollTimer = null;
 let lastRecords = [];
+const renderCache = {
+  accounts: "",
+  history: "",
+  log: "",
+  reservations: "",
+  templates: "",
+  timeOptions: "",
+};
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -63,6 +71,10 @@ function showToast(message) {
   }, 3600);
 }
 
+function stableSignature(value) {
+  return JSON.stringify(value ?? null);
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
@@ -76,12 +88,18 @@ async function api(path, options = {}) {
 }
 
 function setSelectOptions(select, options, placeholder = "暂无可选项") {
+  const signature = stableSignature({ options, placeholder });
+  if (select.dataset.signature === signature) {
+    return;
+  }
+  const previousValue = select.value;
   select.innerHTML = "";
   if (!options.length) {
     const option = document.createElement("option");
     option.value = "";
     option.textContent = placeholder;
     select.append(option);
+    select.dataset.signature = signature;
     return;
   }
   options.forEach((item) => {
@@ -95,18 +113,32 @@ function setSelectOptions(select, options, placeholder = "暂无可选项") {
     }
     select.append(option);
   });
+  if ([...select.options].some((option) => option.value === previousValue)) {
+    select.value = previousValue;
+  }
+  select.dataset.signature = signature;
 }
 
 function fillTimeOptions(timeOptions) {
+  const signature = stableSignature(timeOptions);
+  if (renderCache.timeOptions === signature) {
+    return;
+  }
   const previousStart = els.startTime.value || "08:00:00";
   const previousEnd = els.endTime.value || "22:00:00";
   setSelectOptions(els.startTime, timeOptions);
   setSelectOptions(els.endTime, timeOptions);
   els.startTime.value = timeOptions.includes(previousStart) ? previousStart : timeOptions[0];
   els.endTime.value = timeOptions.includes(previousEnd) ? previousEnd : timeOptions[timeOptions.length - 1];
+  renderCache.timeOptions = signature;
 }
 
 function renderReservations(reservations) {
+  const signature = stableSignature(reservations);
+  if (renderCache.reservations === signature) {
+    return;
+  }
+  renderCache.reservations = signature;
   if (!reservations.length) {
     els.reservationList.className = "reservation-list empty";
     els.reservationList.textContent = "暂无预约信息";
@@ -177,6 +209,11 @@ function renderRecords(records) {
 }
 
 function renderAccounts(accounts) {
+  const signature = stableSignature(accounts);
+  if (renderCache.accounts === signature) {
+    return;
+  }
+  renderCache.accounts = signature;
   setSelectOptions(
     els.accountSelect,
     accounts.map((usernumber) => ({ label: usernumber, value: usernumber })),
@@ -192,12 +229,40 @@ function renderAccounts(accounts) {
 }
 
 function renderLog(runLog) {
+  const signature = stableSignature(runLog);
+  if (renderCache.log === signature) {
+    return;
+  }
+  renderCache.log = signature;
   if (!runLog.length) {
     els.runLog.textContent = "暂无运行日志";
     return;
   }
   els.runLog.textContent = runLog.join("\n");
   els.runLog.scrollTop = els.runLog.scrollHeight;
+}
+
+function renderTemplateOptions(templates) {
+  const options = (templates || []).map((template) => ({
+    label: `${template.name} · ${template.count} 条`,
+    value: template.name,
+  }));
+  const signature = stableSignature(options);
+  if (renderCache.templates === signature) {
+    return;
+  }
+  renderCache.templates = signature;
+  setSelectOptions(els.templateSelect, options, "暂无模板");
+}
+
+function renderHistoryOptions(history) {
+  const options = (history || []).map((record) => ({ label: record.label, value: record.label }));
+  const signature = stableSignature(options);
+  if (renderCache.history === signature) {
+    return;
+  }
+  renderCache.history = signature;
+  setSelectOptions(els.historySelect, options, "暂无历史记录");
 }
 
 function renderState(nextState) {
@@ -211,20 +276,8 @@ function renderState(nextState) {
   renderReservations(state.reservations || []);
   renderAccounts(state.accounts || []);
   renderLog(state.runLog || []);
-
-  setSelectOptions(
-    els.templateSelect,
-    (state.templates || []).map((template) => ({
-      label: `${template.name} · ${template.count} 条`,
-      value: template.name,
-    })),
-    "暂无模板"
-  );
-  setSelectOptions(
-    els.historySelect,
-    (state.history || []).map((record) => ({ label: record.label, value: record.label })),
-    "暂无历史记录"
-  );
+  renderTemplateOptions(state.templates || []);
+  renderHistoryOptions(state.history || []);
 
   if (state.message) showToast(state.message);
 }
