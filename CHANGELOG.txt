@@ -1,5 +1,12 @@
 # 版本更新日志
 
+## [版本号] - 4.0.1
+### 修复
+- 修复 FastAPI 入口在 Python 3.8 环境下因 `tuple[str, str]` 类型标注导致导入失败的问题。
+
+### 优化
+- `fastapi_app.py` 新增直接运行入口，可使用 `python fastapi_app.py` 启动本地服务。
+
 ## [版本号] - 4.0.0
 ### 新增
 - 新增 FastAPI 主入口 `fastapi_app.py`，将可视化操作迁移为 API + 静态前端。

@@ -6,6 +6,11 @@
 
 ## 最近更新
 
+### 2026-06-03
+
+- 修复 FastAPI 入口在 Python 3.8 环境下因 `tuple[str, str]` 类型标注导致无法启动的问题。
+- 新增 `python fastapi_app.py` 直接启动方式，默认监听 `127.0.0.1:8000`。
+
 ### 2026-06-02
 
 - 新增 FastAPI 主入口 `fastapi_app.py`，将原 Gradio 事件流迁移为 API + 静态前端，保留现有预约、预热、模板、历史、账号管理和查询取消能力。
@@ -103,13 +108,19 @@ python -m pip check
 启动前端：
 
 ```bash
+python fastapi_app.py
+```
+
+也可以使用 Uvicorn 命令启动：
+
+```bash
 uvicorn fastapi_app:app --host 127.0.0.1 --port 8000
 ```
 
 如果默认端口被占用，可以换一个端口：
 
 ```bash
-uvicorn fastapi_app:app --host 127.0.0.1 --port 8999
+FASTAPI_SERVER_PORT=8999 python fastapi_app.py
 ```
 
 启动后在浏览器打开：

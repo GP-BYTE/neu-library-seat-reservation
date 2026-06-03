@@ -8,7 +8,7 @@ import re
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -95,7 +95,7 @@ def history_label(record: Dict[str, Any]) -> str:
     return f"{record['学号']} | {record['座位号']} | {record['开始时间']}-{record['结束时间']}"
 
 
-def split_aim_string(order_string: str) -> tuple[str, str]:
+def split_aim_string(order_string: str) -> Tuple[str, str]:
     translate_dic = {
         "216": "书库阅览区",
         "207": "书库阅览区",
@@ -736,3 +736,10 @@ def api_clear_accounts():
     cleared = manage_user.clear_users()
     message = "已下线所有账号" if cleared else "当前没有已缓存账号"
     return current_state(message)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("FASTAPI_SERVER_PORT", "8000"))
+    uvicorn.run("fastapi_app:app", host="127.0.0.1", port=port)
